@@ -8,12 +8,62 @@ let timer = 0;
 let timerInterval;
 let isPaused = false;
 let difficulty = 'normal';
+let soundEnabled = true;
 
 const difficulties = {
     easy: { pairs: 3, cols: 3, cards: cards.slice(0, 3) },
     normal: { pairs: 8, cols: 4, cards: cards.slice(0, 8) },
     hard: { pairs: 12, cols: 6, cards: cards }
 };
+
+// Sound effects using Web Audio API
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(frequency, duration, type = 'sine') {
+    if (!soundEnabled) return;
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    oscillator.type = type;
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+}
+
+function createParticles(element, emoji) {
+    const rect = element.getBoundingClientRect();
+    const particles = ['✨', '⭐', '💫', '🌟', emoji];
+    
+    for (let i = 0; i < 8; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.textContent = particles[Math.floor(Math.random() * particles.length)];
+        particle.style.left = rect.left + rect.width / 2 + 'px';
+        particle.style.top = rect.top + rect.height / 2 + 'px';
+        particle.style.transform = `translate(${(Math.random() - 0.5) * 100}px, ${(Math.random() - 0.5) * 100}px)`;
+        document.body.appendChild(particle);
+        
+        setTimeout(() => particle.remove(), 1000);
+    }
+}
+
+function toggleSound() {
+    soundEnabled = !soundEnabled;
+    const btn = document.getElementById('soundBtn');
+    btn.textContent = soundEnabled ? '🔊 Sound ON' : '🔇 Sound OFF';
+    
+    if (soundEnabled) {
+        playSound(440, 0.1);
+    }
+}
 
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -49,6 +99,7 @@ function setDifficulty(level) {
     });
     document.querySelector(`[data-difficulty="${level}"]`).classList.add('bg-blue-500', 'text-white');
     document.querySelector(`[data-difficulty="${level}"]`).classList.remove('text-gray-300');
+    playSound(523, 0.1);
     startGame();
 }
 
@@ -57,7 +108,7 @@ function createBoard() {
     const config = difficulties[difficulty];
     
     board.innerHTML = '';
-    board.className = `grid grid-cols-${config.cols} gap-4 p-6 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/20`;
+    board.className = `grid grid-cols-${config.cols} gap-4 p-6 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/20 relative`;
     
     gameCards = [...config.cards, ...config.cards];
     shuffle(gameCards);
@@ -74,6 +125,9 @@ function createBoard() {
 
 function flipCard(card) {
     if (isPaused || card.classList.contains('flipped') || card.classList.contains('matched') || flippedCards.length === 2) return;
+    
+    // Play flip sound
+    playSound(330, 0.1);
     
     card.classList.add('flipped');
     card.classList.remove('bg-gradient-to-br', 'from-indigo-600', 'to-purple-600');
@@ -92,10 +146,18 @@ function checkMatch() {
     const [card1, card2] = flippedCards;
     
     if (card1.dataset.symbol === card2.dataset.symbol) {
+        // Match found - success sound and particles
+        playSound(523, 0.3);
+        playSound(659, 0.3);
+        
         card1.classList.remove('bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse');
         card2.classList.remove('bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse');
-        card1.classList.add('matched', 'bg-gradient-to-br', 'from-green-500', 'to-emerald-500', 'cursor-default');
-        card2.classList.add('matched', 'bg-gradient-to-br', 'from-green-500', 'to-emerald-500', 'cursor-default');
+        card1.classList.add('matched', 'bg-gradient-to-br', 'from-green-500', 'to-emerald-500', 'cursor-default', 'pulse-glow');
+        card2.classList.add('matched', 'bg-gradient-to-br', 'from-green-500', 'to-emerald-500', 'cursor-default', 'pulse-glow');
+        
+        // Create particles for both cards
+        createParticles(card1, card1.dataset.symbol);
+        createParticles(card2, card2.dataset.symbol);
         
         matchedPairs++;
         score += 10 + (difficulty === 'hard' ? 5 : difficulty === 'easy' ? -2 : 0);
@@ -103,15 +165,27 @@ function checkMatch() {
         
         if (matchedPairs === difficulties[difficulty].pairs) {
             stopTimer();
+            // Victory sound sequence
+            setTimeout(() => playSound(523, 0.2), 100);
+            setTimeout(() => playSound(659, 0.2), 300);
+            setTimeout(() => playSound(784, 0.4), 500);
             setTimeout(showWinModal, 500);
         }
     } else {
-        card1.classList.remove('flipped', 'bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse');
-        card2.classList.remove('flipped', 'bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse');
-        card1.classList.add('bg-gradient-to-br', 'from-indigo-600', 'to-purple-600');
-        card2.classList.add('bg-gradient-to-br', 'from-indigo-600', 'to-purple-600');
-        card1.textContent = '';
-        card2.textContent = '';
+        // No match - error sound and shake
+        playSound(220, 0.2, 'sawtooth');
+        
+        card1.classList.add('shake');
+        card2.classList.add('shake');
+        
+        setTimeout(() => {
+            card1.classList.remove('flipped', 'bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse', 'shake');
+            card2.classList.remove('flipped', 'bg-gradient-to-br', 'from-pink-500', 'to-red-500', 'animate-pulse', 'shake');
+            card1.classList.add('bg-gradient-to-br', 'from-indigo-600', 'to-purple-600');
+            card2.classList.add('bg-gradient-to-br', 'from-indigo-600', 'to-purple-600');
+            card1.textContent = '';
+            card2.textContent = '';
+        }, 500);
     }
     
     flippedCards = [];
@@ -146,6 +220,8 @@ function pauseGame() {
     isPaused = !isPaused;
     const btn = document.getElementById('pauseBtn');
     
+    playSound(440, 0.1);
+    
     if (isPaused) {
         btn.innerHTML = '▶️ Resume';
         document.querySelectorAll('#gameBoard > div').forEach(card => {
@@ -177,6 +253,9 @@ function startGame() {
     stopTimer();
     createBoard();
     startTimer();
+    
+    // Game start sound
+    playSound(440, 0.1);
 }
 
 // Initialize game when page loads
