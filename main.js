@@ -25,8 +25,30 @@ function playSound(frequency, duration, type = 'sine') {
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
+// Audio context and sound settings
+let audioContext;
+let soundEnabled = true;
+
+// Initialize audio on first user interaction
+function initAudio() {
+    if (!audioContext && soundEnabled) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+// Add event listeners for user interaction
+document.addEventListener('click', initAudio, { once: true });
+document.addEventListener('keydown', initAudio, { once: true });
+
+function playSound(frequency, duration, type = 'sine') {
+    if (!soundEnabled || !audioContext) return;
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
+}
     
     oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
     oscillator.type = type;
